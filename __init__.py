@@ -2,6 +2,7 @@ import bpy
 from .particle import apply_force
 from .particle import particle_system
 from .particle import solver
+from .particle import custom_prop
 from bpy.props import BoolProperty, EnumProperty
 from mathutils import Vector, Matrix
 import subprocess
@@ -54,7 +55,6 @@ class DeleteParticleSystemOperator(bpy.types.Operator):
 
         return {'FINISHED'}
 
-
 class ApplyConstantForceOperator(bpy.types.Operator):
     bl_idname = "apply_constant_force.particle"
     bl_label = "apply constant force on particle system"
@@ -62,8 +62,8 @@ class ApplyConstantForceOperator(bpy.types.Operator):
 
     def execute(self, context):
         p_system = particle_system.ParticleSystem.get_instance()
-        constant_force_vector = Vector(context.scene.constant_force_vector)
-        p_system.add_force(apply_force.ConstantForce(constant_force_vector))
+        # p_system.add_force(apply_force.ConstantForce(context.scene.constant_force_vector))
+        p_system.add_force(apply_force.ConstantForce())
         return {'FINISHED'}
 
 class ApplyDampingForceOperator(bpy.types.Operator):
@@ -73,8 +73,7 @@ class ApplyDampingForceOperator(bpy.types.Operator):
 
     def execute(self, context):
         p_system = particle_system.ParticleSystem.get_instance()
-        damping_constant = context.scene.damping_constant
-        p_system.add_force(apply_force.DampingForce(damping_constant))
+        p_system.add_force(apply_force.DampingForce())
         return {'FINISHED'}
 
 class ApplySpringForceOperator(bpy.types.Operator):
@@ -84,9 +83,7 @@ class ApplySpringForceOperator(bpy.types.Operator):
 
     def execute(self, context):
         p_system = particle_system.ParticleSystem.get_instance()
-        spring_constant = context.scene.spring_constant
-        rest_location = Vector(context.scene.spring_rest_location)
-        p_system.add_force(apply_force.SpringForce(spring_constant, rest_location))
+        p_system.add_force(apply_force.SpringForce())
         return {'FINISHED'}
 
 class CalculateFrameOperator(bpy.types.Operator):
@@ -134,7 +131,6 @@ class ApplySolverOperator(bpy.types.Operator):
     def execute(self, context):
         p_system = particle_system.ParticleSystem.get_instance()
         solver_name = context.scene.solver_name
-        print(solver_name)
         if solver_name == "FOREULER":
             p_system.solver = solver.ForwardEulerSolver()
         elif solver_name == "2RK":
@@ -144,6 +140,36 @@ class ApplySolverOperator(bpy.types.Operator):
         elif solver_name == "BACKEULER":
             p_system.solver = solver.BackwardEulerSolver()
         return {'FINISHED'}
+
+class MassSpringSystemOperator(bpy.types.Operator):
+    bl_idname = "particle_system.mass_spring_system"
+    bl_label = "Create mass spring system"
+    bl_description = "create mass spring system"
+
+    def execute(self, context):
+        mass_spring_system = particle_system.MassSpringSystem()
+        return {'FINISHED'}
+
+class ClothMassSpringSystemOperator(bpy.types.Operator):
+    bl_idname = "particle_system.cloth_mass_spring_system"
+    bl_label = "Create cloth mass spring system"
+    bl_description = "create cloth mass spring system"
+
+    def execute(self, context):
+        mass_spring_system = particle_system.MassSpringSystem(advance=True)
+        return {'FINISHED'}
+
+class RemoveForceOperator(bpy.types.Operator):
+    bl_idname = "force.remove"
+    bl_label = "Remove force"
+    bl_description = "remove force"
+
+    def execute(self, context):
+        p_system = particle_system.ParticleSystem.get_instance()
+        force_idx = int(context.scene.force_name)
+        p_system.force_list.pop(force_idx)
+        return {'FINISHED'}
+
 
 class ParticleSimulationPanel(bpy.types.Panel):
     bl_idname = "PARTICLE_PT_SIMULATION"
@@ -164,28 +190,37 @@ class ParticleSimulationPanel(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene, "modify_particle_location", text="Realtime modify particle location")
         row = layout.row()
-        row.prop(context.scene, "constant_force_vector", text="Constant force")
         row.operator('apply_constant_force.particle', text="apply constant force")
         row = layout.row()
-        row.prop(context.scene, "damping_constant", text="Damping constant")
         row.operator('apply_damping_force.particle', text="apply damping force")
         row = layout.row()
-        row.prop(context.scene, "spring_constant", text="Spring constant")
-        row.prop(context.scene, "spring_rest_location", text="Spring rest location")
         row.operator('apply_spring_force.particle', text="apply spring force")
         row = layout.row()
         row.operator('particle.calculate_frame', text="calculate frame")
         row = layout.row()
         row.operator('add.particle', text="add particle")
         row.operator('remove.particle', text="remove particle")
+        row = layout.row()
+        row.operator('particle_system.mass_spring_system', text="mass spring system")
+        row.operator('particle_system.cloth_mass_spring_system', text="cloth system")
 
-        # TODO use a variable force apply panel
-        layout.row().separator()
+        row = layout.row()
+        row.separator()
+        row.prop(context.scene, 'force_name', text="force list")
+        if context.scene.force_name != "None":
+            p_system = particle_system.ParticleSystem.get_instance()
+            force_idx = int(context.scene.force_name)
+            p_system.force_list[force_idx].draw(context, layout)
+            row.operator('force.remove', text="remove current force")
 
-        p_system = particle_system.ParticleSystem.get_instance()
-        for force in p_system.force_list:
-            force.draw(context, layout)
-
+def force_item_callback(self, context):
+    p_system = particle_system.ParticleSystem.get_instance()
+    enum_prop_list = []
+    for i, force in enumerate(p_system.force_list):
+        enum_prop_list.append((str(i), str(i) + " " + type(force).__name__, str(i) + " " + type(force).__name__))
+    if len(enum_prop_list) == 0:
+        enum_prop_list.append(("None", "None", "None"))
+    return enum_prop_list
 
 def solver_item_callback(self, context):
     return (
@@ -236,14 +271,20 @@ def register():
     bpy.utils.register_class(AddParticleOperator)
     bpy.utils.register_class(RemoveParticleOperator)
     bpy.utils.register_class(ApplySolverOperator)
+    bpy.utils.register_class(MassSpringSystemOperator)
+    bpy.utils.register_class(RemoveForceOperator)
+    bpy.utils.register_class(ClothMassSpringSystemOperator)
+
+    bpy.utils.register_class(custom_prop.ConstantForceProp)
+    bpy.utils.register_class(custom_prop.DampingForceProp)
+    bpy.utils.register_class(custom_prop.SpringForceProp)
 
     bpy.types.Scene.modify_particle_location = BoolProperty(name="modify_particle_location", update=modify_particle_update)
     bpy.types.Scene.solver_name = bpy.props.EnumProperty(name="solver_name", items=solver_item_callback)
-    bpy.types.Scene.constant_force_vector = bpy.props.FloatVectorProperty(size=3)
-    bpy.types.Scene.damping_constant = bpy.props.FloatProperty(name="damping_constant")
-    bpy.types.Scene.spring_constant = bpy.props.FloatProperty(name="spring_constant")
-    bpy.types.Scene.spring_rest_location = bpy.props.FloatVectorProperty(size=3)
-
+    bpy.types.Scene.constant_force_vector = bpy.props.PointerProperty(type=custom_prop.ConstantForceProp)
+    bpy.types.Scene.damping_constant = bpy.props.PointerProperty(type=custom_prop.DampingForceProp)
+    bpy.types.Scene.spring_force = bpy.props.PointerProperty(type=custom_prop.SpringForceProp)
+    bpy.types.Scene.force_name = bpy.props.EnumProperty(name="force_name", items=force_item_callback)
 
 def unregister():
     bpy.utils.unregister_class(DeleteParticleSystemOperator)
@@ -255,6 +296,14 @@ def unregister():
     bpy.utils.unregister_class(AddParticleOperator)
     bpy.utils.unregister_class(RemoveParticleOperator)
     bpy.utils.unregister_class(ApplySolverOperator)
+    bpy.utils.unregister_class(MassSpringSystemOperator)
+    bpy.utils.unregister_class(RemoveForceOperator)
+    bpy.utils.unregister_class(ClothMassSpringSystemOperator)
+
+    bpy.utils.unregister_class(custom_prop.ConstantForceProp)
+    bpy.utils.unregister_class(custom_prop.DampingForceProp)
+    bpy.utils.unregister_class(custom_prop.SpringForceProp)
+
 
 
 if __name__ == "__main__":

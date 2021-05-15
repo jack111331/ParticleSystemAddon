@@ -3,6 +3,7 @@ from mathutils import Vector, Matrix
 from .utils import getParticleSystem, create_collection, create_sphere
 from .apply_force import SpringTwoParticleForce, GravityForce, DampingForce
 from .solver import ForwardEulerSolver
+from .constraint import PinConstraint
 import numpy as np
 import math
 
@@ -42,6 +43,7 @@ class ParticleSystem:
         self.particle_list = []
         self.force_list = []
         self.coherent_force_list = []
+        self.constraint_list = []
         self.time_step = 0.0
         self.collection = None
         self.solver = ForwardEulerSolver()
@@ -73,6 +75,9 @@ class ParticleSystem:
     def add_coherent_force(self, coherent_force):
         self.coherent_force_list.append(coherent_force)
 
+    def add_constraint(self, constraint):
+        self.constraint_list.append(constraint)
+
     def get_dim(self):
         return 6 * len(self.particle_list)
 
@@ -102,6 +107,9 @@ class ParticleSystem:
 
         for coherent_force in self.coherent_force_list:
             coherent_force.apply_force(self)
+
+        for constraint in self.constraint_list:
+            constraint.apply_constraint(self)
 
         particle_deriv_state = np.zeros((6 * len(self.particle_list)))
         for i in range(len(self.particle_list)):
@@ -147,8 +155,8 @@ class ParticleSystem:
 
 class MassSpringSystem:
     def __init__(self, advance=False):
-        self.row = 20
-        self.col = 20
+        self.row = 7
+        self.col = 7
         self.stiffness_constant = 0.2
         self.rest_length = 4.0
 
@@ -161,10 +169,15 @@ class MassSpringSystem:
         while len(p_system.particle_list) > particle_amount:
             p_system.remove_particle(len(p_system.particle_list) - 1)
 
+        pin_constraint = PinConstraint()
         for i in range(self.row):
             for j in range(self.col):
                 particle_idx = i*self.col + j
-                p_system.particle_list[particle_idx].location = Vector((HORIZONTAL_LENGTH * j, 0.0, -VERTICAL_LENGTH * i))
+                location = Vector((HORIZONTAL_LENGTH * j, 0.0, -VERTICAL_LENGTH * i))
+                p_system.particle_list[particle_idx].location = location
+                if i == 0 and (j == 0 or j == self.col-1):
+                    pin_constraint.add_pin(p_system.particle_list[particle_idx], location)
+        p_system.add_constraint(pin_constraint)
 
         # Structural force
         structural_force = SpringTwoParticleForce()
@@ -198,7 +211,7 @@ class MassSpringSystem:
                             shear_rest_length)
                     if i-1 >= 0 and j + 1 < self.col:
                         shear_force.add_coherent(
-                            (p_system.particle_list[(i+1) * self.col + j + 1], p_system.particle_list[i * self.col + j]),
+                            (p_system.particle_list[(i-1) * self.col + j + 1], p_system.particle_list[i * self.col + j]),
                             shear_rest_length)
                     if i+1 < self.row and j + 1 < self.col:
                         shear_force.add_coherent(

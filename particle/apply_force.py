@@ -1,5 +1,6 @@
 import bpy
 from .utils import getParticleSystem
+from .custom_prop import ConstantForceProp, DampingForceProp, SpringForceProp
 from mathutils import Vector, Matrix
 
 # Hand made a particle system and attach it to existing particle system in blender
@@ -13,40 +14,51 @@ class Force:
         pass
 
 class ConstantForce(Force):
-    def __init__(self, force_constant=Vector((2.0, 2.0, 2.0))):
-        self.forceforce_constant = force_constant
+    def __init__(self, force_constant=(2.0, 2.0, 2.0)):
+        self.force_constant = force_constant
 
     def draw(self, context, layout):
-        row.prop(self, "force_constant", text="Force constant")
+        row = layout.row()
+        bpy.context.scene.constant_force_vector.constant_force_vector.foreach_set(self.force_constant)
+        row.prop(context.scene.constant_force_vector, "constant_force_vector", text="Force constant")
+        ConstantForceProp.constant_force_reference = self
 
     def apply_force(self, particle):
-        particle.apply_force(self.force_constant)
+        particle.apply_force(Vector(self.force_constant))
 
 class DampingForce(Force):
-    def __init__(self, damp_constant=0.5):
+    def __init__(self, damp_constant=(0.5,)):
         self.damp_constant = damp_constant
 
     def draw(self, context, layout):
-        pass
+        row = layout.row()
+        bpy.context.scene.damping_constant.damping_constant.foreach_set(self.damp_constant)
+        row.prop(context.scene.damping_constant, "damping_constant", text="Damp constant")
+        DampingForceProp.damping_force_reference = self
 
     def apply_force(self, particle):
         # F = -cv
         location, velocity = particle.get_state()
-        damped_force = -self.damp_constant * velocity
+        damped_force = -self.damp_constant[0] * velocity
         particle.apply_force(damped_force)
 
 class SpringForce(Force):
-    def __init__(self, spring_constant, rest_location):
+    def __init__(self, spring_constant = (0.5, ), rest_location = (0.5, 0.5, 0.5)):
         self.spring_constant = spring_constant
         self.rest_location = rest_location
 
     def draw(self, context, layout):
-        pass
+        row = layout.row()
+        bpy.context.scene.spring_force.spring_constant.foreach_set(self.spring_constant)
+        bpy.context.scene.spring_force.spring_rest_location.foreach_set(self.rest_location)
+        row.prop(context.scene.spring_force, "spring_constant", text="Spring constant")
+        row.prop(context.scene.spring_force, "spring_rest_location", text="Spring vector")
+        SpringForceProp.spring_force_reference = self
 
     def apply_force(self, particle):
         #F = k(x – x0)
         location, velocity = particle.get_state()
-        spring_force = self.spring_constant * (self.rest_location - location)
+        spring_force = self.spring_constant[0] * (Vector(self.rest_location) - location)
         particle.apply_force(spring_force)
 
 class GravityForce(Force):
@@ -72,7 +84,7 @@ class CoherentForce:
 class SpringTwoParticleForce(CoherentForce):
     def __init__(self):
         super().__init__()
-        self.spring_constant = 0.5
+        self.spring_constant = 4.0
         self.rest_location_list = []
 
     def add_coherent(self, coherent_particle_tuple, rest_location):
