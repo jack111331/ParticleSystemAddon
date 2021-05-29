@@ -36,6 +36,30 @@ def create_sphere(collection, name, position):
     sphere_ob.scale = Vector((SCALE, SCALE, SCALE))
     return sphere_ob
 
+def create_plane(collection, name, position):
+    # Create an empty mesh and the object.
+    SCALE=4.0
+    mesh = bpy.data.meshes.new(name)
+    plane_ob = bpy.data.objects.new(name, mesh)
+
+    # Select the newly created object
+    collection.objects.link(plane_ob)
+    bpy.context.view_layer.objects.active = plane_ob
+    plane_ob.select_set(True)
+
+    # Construct the bmesh plane and assign it to the blender mesh.
+    bm = bmesh.new()
+    bm.verts.new((SCALE, SCALE, 0))
+    bm.verts.new((SCALE, -SCALE, 0))
+    bm.verts.new((-SCALE, SCALE, 0))
+    bm.verts.new((-SCALE, -SCALE, 0))
+    bmesh.ops.contextual_create(bm, geom=bm.verts)
+    bm.to_mesh(mesh)
+    bm.free()
+
+    plane_ob.location = position
+    return plane_ob
+
 def create_collection(parent_collection, collection_name):
     new_collection = bpy.data.collections.new(name=collection_name)
     parent_collection.children.link(new_collection)

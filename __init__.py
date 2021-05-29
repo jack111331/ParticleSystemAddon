@@ -3,6 +3,9 @@ from .particle import apply_force
 from .particle import particle_system
 from .particle import solver
 from .particle import custom_prop
+from .particle import utils
+from .particle import constraint
+from .particle import collision
 from bpy.props import BoolProperty, EnumProperty
 from mathutils import Vector, Matrix
 import subprocess
@@ -119,7 +122,8 @@ class RemoveParticleOperator(bpy.types.Operator):
 
     def execute(self, context):
         p_system = particle_system.ParticleSystem.get_instance()
-        p_system.update_to_object(context, calculate_frame=True)
+        p_system.remove_particle(int(context.scene.select_particle_idx))
+        p_system.update_to_object(context)
         return {'FINISHED'}
 
 class ApplySolverOperator(bpy.types.Operator):
@@ -170,6 +174,20 @@ class RemoveForceOperator(bpy.types.Operator):
         p_system.force_list.pop(force_idx)
         return {'FINISHED'}
 
+class AddWallCollisionOperator(bpy.types.Operator):
+    bl_idname = "collision.wall"
+    bl_label = "Add wall collision"
+    bl_description = "add wall collision"
+
+    def execute(self, context):
+        p_system = particle_system.ParticleSystem.get_instance()
+        current_collection = bpy.data.collections.get("Collision")
+        if current_collection == None:
+            current_collection = utils.create_collection(context.scene.collection, "Collision")
+        plane_ob = utils.create_plane(current_collection, 'Wall collision', Vector((0.0, 0.0, -4.0)))
+        wall_collision = collision.WallCollision(plane_ob)
+        p_system.add_collision(wall_collision)
+        return {'FINISHED'}
 
 class ParticleSimulationPanel(bpy.types.Panel):
     bl_idname = "PARTICLE_PT_SIMULATION"
@@ -199,10 +217,19 @@ class ParticleSimulationPanel(bpy.types.Panel):
         row.operator('particle.calculate_frame', text="calculate frame")
         row = layout.row()
         row.operator('add.particle', text="add particle")
-        row.operator('remove.particle', text="remove particle")
         row = layout.row()
         row.operator('particle_system.mass_spring_system', text="mass spring system")
         row.operator('particle_system.cloth_mass_spring_system', text="cloth system")
+        row.operator('collision.wall', text="add wall collision")
+
+        row = layout.row()
+        row.separator()
+        row.prop(context.scene, 'select_particle_idx', text="particle list")
+        if context.scene.select_particle_idx != "None":
+            p_system = particle_system.ParticleSystem.get_instance()
+            particle_idx = int(context.scene.select_particle_idx)
+            p_system.draw(context, layout, particle_idx)
+            row.operator('remove.particle', text="remove particle")
 
         row = layout.row()
         row.separator()
@@ -212,6 +239,15 @@ class ParticleSimulationPanel(bpy.types.Panel):
             force_idx = int(context.scene.force_name)
             p_system.force_list[force_idx].draw(context, layout)
             row.operator('force.remove', text="remove current force")
+
+def particle_item_callback(self, context):
+    p_system = particle_system.ParticleSystem.get_instance()
+    enum_prop_list = []
+    for i, force in enumerate(p_system.init_particle_list):
+        enum_prop_list.append((str(i), str(i), str(i)))
+    if len(enum_prop_list) == 0:
+        enum_prop_list.append(("None", "None", "None"))
+    return enum_prop_list
 
 def force_item_callback(self, context):
     p_system = particle_system.ParticleSystem.get_instance()
@@ -274,16 +310,20 @@ def register():
     bpy.utils.register_class(MassSpringSystemOperator)
     bpy.utils.register_class(RemoveForceOperator)
     bpy.utils.register_class(ClothMassSpringSystemOperator)
+    bpy.utils.register_class(AddWallCollisionOperator)
 
+    bpy.utils.register_class(custom_prop.ParticleProp)
     bpy.utils.register_class(custom_prop.ConstantForceProp)
     bpy.utils.register_class(custom_prop.DampingForceProp)
     bpy.utils.register_class(custom_prop.SpringForceProp)
 
     bpy.types.Scene.modify_particle_location = BoolProperty(name="modify_particle_location", update=modify_particle_update)
     bpy.types.Scene.solver_name = bpy.props.EnumProperty(name="solver_name", items=solver_item_callback)
+    bpy.types.Scene.particle_property = bpy.props.PointerProperty(type=custom_prop.ParticleProp)
     bpy.types.Scene.constant_force_vector = bpy.props.PointerProperty(type=custom_prop.ConstantForceProp)
     bpy.types.Scene.damping_constant = bpy.props.PointerProperty(type=custom_prop.DampingForceProp)
     bpy.types.Scene.spring_force = bpy.props.PointerProperty(type=custom_prop.SpringForceProp)
+    bpy.types.Scene.select_particle_idx = bpy.props.EnumProperty(name="select_particle_idx", items=particle_item_callback)
     bpy.types.Scene.force_name = bpy.props.EnumProperty(name="force_name", items=force_item_callback)
 
 def unregister():
@@ -299,11 +339,21 @@ def unregister():
     bpy.utils.unregister_class(MassSpringSystemOperator)
     bpy.utils.unregister_class(RemoveForceOperator)
     bpy.utils.unregister_class(ClothMassSpringSystemOperator)
+    bpy.utils.unregister_class(AddWallCollisionOperator)
 
+    bpy.utils.unregister_class(custom_prop.ParticleProp)
     bpy.utils.unregister_class(custom_prop.ConstantForceProp)
     bpy.utils.unregister_class(custom_prop.DampingForceProp)
     bpy.utils.unregister_class(custom_prop.SpringForceProp)
 
+    del bpy.types.Scene.modify_particle_location
+    del bpy.types.Scene.solver_name
+    del bpy.types.Scene.particle_property
+    del bpy.types.Scene.constant_force_vector
+    del bpy.types.Scene.damping_constant
+    del bpy.types.Scene.spring_force
+    del bpy.types.Scene.select_particle_idx
+    del bpy.types.Scene.force_name
 
 
 if __name__ == "__main__":

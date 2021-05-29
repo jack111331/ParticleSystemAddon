@@ -1,4 +1,19 @@
 import bpy
+from mathutils import Vector
+
+def update_particle_prop(self, context):
+    ParticleProp.particle_reference.mass = bpy.context.scene.particle_property.init_mass.__getitem__(0)
+    getitem_func = bpy.context.scene.particle_property.init_location.__getitem__
+    ParticleProp.particle_reference.location = Vector((getitem_func(0), getitem_func(1), getitem_func(2)))
+    getitem_func = bpy.context.scene.particle_property.init_velocity.__getitem__
+    ParticleProp.particle_reference.velocity = Vector((getitem_func(0), getitem_func(1), getitem_func(2)))
+
+
+class ParticleProp(bpy.types.PropertyGroup):
+    init_location: bpy.props.FloatVectorProperty(size=3, update=update_particle_prop)
+    init_velocity: bpy.props.FloatVectorProperty(size=3, update=update_particle_prop)
+    init_mass: bpy.props.FloatVectorProperty(size=1, update=update_particle_prop)
+    particle_reference = None
 
 def update_constant_force_prop(self, context):
     getitem_func = bpy.context.scene.constant_force_vector.constant_force_vector.__getitem__

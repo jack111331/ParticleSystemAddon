@@ -4,6 +4,7 @@ from .utils import getParticleSystem, create_collection, create_sphere
 from .apply_force import SpringTwoParticleForce, GravityForce, DampingForce
 from .solver import ForwardEulerSolver
 from .constraint import PinConstraint
+from .custom_prop import ParticleProp
 import numpy as np
 import math
 
@@ -14,7 +15,6 @@ class Particle:
         self.velocity = velocity
         self.force = force
         self.mass = mass
-
 
     def clear_force(self):
         self.force = Vector((0.0, 0.0, 0.0))
@@ -40,10 +40,12 @@ class Particle:
 class ParticleSystem:
     instance = None
     def __init__(self):
+        self.init_particle_list = []
         self.particle_list = []
         self.force_list = []
         self.coherent_force_list = []
         self.constraint_list = []
+        self.collision_detect_list = []
         self.time_step = 0.0
         self.collection = None
         self.solver = ForwardEulerSolver()
@@ -62,12 +64,29 @@ class ParticleSystem:
             del cls.instance
             cls.instance = None
 
+    def draw(self, context, layout, particle_idx):
+        row = layout.row()
+        getitem_func = bpy.context.scene.particle_property.init_location.__getitem__
+        print("Before", self.init_particle_list[particle_idx].location, (getitem_func(0), getitem_func(1), getitem_func(2)))
+        bpy.context.scene.particle_property.init_location.foreach_set(self.init_particle_list[particle_idx].location)
+        getitem_func = bpy.context.scene.particle_property.init_location.__getitem__
+        print("After", self.init_particle_list[particle_idx].location, (getitem_func(0), getitem_func(1), getitem_func(2)))
+        bpy.context.scene.particle_property.init_velocity.foreach_set(self.init_particle_list[particle_idx].velocity)
+        bpy.context.scene.particle_property.init_mass.foreach_set((self.init_particle_list[particle_idx].mass, ))
+        row.prop(context.scene.particle_property, "init_location", text="Initial location")
+        row.prop(context.scene.particle_property, "init_velocity", text="Initial velocity")
+        row.prop(context.scene.particle_property, "init_mass", text="Initial mass")
+        ParticleProp.particle_reference = self.init_particle_list[particle_idx]
+
     def add_particle(self, location=Vector((0.0, 0.0, 0.0)), velocity=Vector((0.0, 0.0, 0.0)), force=Vector((0.0, 0.0, 0.0)), mass=1.0):
         particle = Particle(location, velocity, force, mass)
+        init_particle = Particle(location, velocity, force, mass)
         self.particle_list.append(particle)
+        self.init_particle_list.append(init_particle)
 
     def remove_particle(self, i):
         self.particle_list.pop(i)
+        self.init_particle_list.pop(i)
 
     def add_force(self, force):
         self.force_list.append(force)
@@ -77,6 +96,9 @@ class ParticleSystem:
 
     def add_constraint(self, constraint):
         self.constraint_list.append(constraint)
+
+    def add_collision(self, collision):
+        self.collision_detect_list.append(collision)
 
     def get_dim(self):
         return 6 * len(self.particle_list)
@@ -128,26 +150,27 @@ class ParticleSystem:
         if current_collection == None:
             current_collection = create_collection(context.scene.collection, "Custom Particle System")
         object_count = len(current_collection.objects)
-        while object_count < len(self.particle_list):
-            create_sphere(current_collection, str(object_count), self.particle_list[object_count].location)
+        while object_count < len(self.init_particle_list):
+            create_sphere(current_collection, str(object_count), self.init_particle_list[object_count].location)
             object_count = object_count + 1
-        while object_count > len(self.particle_list):
+        while object_count > len(self.init_particle_list):
             current_collection.objects.unlink(current_collection.objects.get(str(object_count-1)))
             object_count = object_count-1
 
         if calculate_frame == False:
-            for i in range(len(self.particle_list)):
+            for i in range(len(self.init_particle_list)):
                 particle_ob = current_collection.objects.get(str(i))
-                particle_ob.location = self.particle_list[i].location
+                particle_ob.location = self.init_particle_list[i].location
         else:
             bpy.context.scene.frame_set(0)
-            for j in range(len(self.particle_list)):
-                particle_ob = current_collection.objects.get(str(j))
-                self.particle_list[j].location = particle_ob.location
-                self.particle_list[j].velocity = Vector((0.0, 0.0, 0.0))
+            for j in range(len(self.init_particle_list)):
+                self.particle_list[j].location = self.init_particle_list[j].location.copy()
+                self.particle_list[j].velocity = self.init_particle_list[j].velocity.copy()
 
             for i in range(self.frame_start, self.frame_end):
                 self.solver.solve_step(self, 0.05)
+                for collision in self.collision_detect_list:
+                    collision.project_collision(self)
                 for j in range(len(self.particle_list)):
                     particle_ob = current_collection.objects.get(str(j))
                     particle_ob.location = self.particle_list[j].location

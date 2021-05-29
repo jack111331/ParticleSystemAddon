@@ -1,10 +1,11 @@
 import bpy
 from mathutils import Vector, Matrix
+
 class Constraint:
     def apply_constraint(self, particle_system):
         pass
 
-class PinConstraint:
+class PinConstraint(Constraint):
     def __init__(self):
         self.pin_list = []
 
@@ -19,7 +20,7 @@ class PinConstraint:
             particle.force = Vector((0.0, 0.0, 0.0))
             particle.location = location
 
-class AxisConstraint:
+class AxisConstraint(Constraint):
     def __init__(self):
         self.axis_list = []
 
@@ -39,7 +40,7 @@ class AxisConstraint:
             particle.velocity = particle.velocity * axis_vector
             particle.force = Vector((0.0, 0.0, 0.0))
 
-class PlaneConstraint:
+class PlaneConstraint(Constraint):
     def __init__(self):
         self.plane_list = []
 
@@ -58,3 +59,4 @@ class PlaneConstraint:
             particle, plane_vector = pin
             particle.velocity = particle.velocity * plane_vector
             particle.force = Vector((0.0, 0.0, 0.0))
+
