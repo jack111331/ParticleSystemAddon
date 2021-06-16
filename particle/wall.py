@@ -8,8 +8,14 @@ class Wall:
     def get_location(self):
         return self.reference_ob.location
 
+    def set_location(self, location):
+        self.reference_ob.location = location
+
     def get_normal(self):
         return self.reference_ob.rotation_euler.to_matrix() @ Vector((0.0, 0.0, 1.0))
+
+    def set_normal(self, normal):
+        self.reference_ob.rotation_euler = Vector((0.0, 0.0, 1.0)).rotation_difference(normal).to_euler()
 
     def is_collision(self, point_location, point_vector):
         location = self.get_location()
