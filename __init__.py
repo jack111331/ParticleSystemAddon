@@ -127,6 +127,25 @@ class RemoveParticleOperator(bpy.types.Operator):
         p_system.update_to_object(context)
         return {'FINISHED'}
 
+class SyncParticleInitOperator(bpy.types.Operator):
+    bl_idname = "particle.sync_init"
+    bl_label = "Sync particle initial state"
+    bl_description = "sync particle initial state"
+
+    def execute(self, context):
+        p_system = particle_system.ParticleSystem.get_instance()
+        particle_idx = int(context.scene.select_particle_idx)
+        new_location = p_system.init_particle_list[particle_idx].location
+        new_mass = p_system.init_particle_list[particle_idx].mass
+        particle_ob = bpy.data.objects.get(str(particle_idx))
+        bpy.ops.object.select_all(action='DESELECT')
+        particle_ob.select = True
+        context.view_layer.objects.active = particle_ob
+        particle_ob.location = Vector(new_location)
+        particle_ob.scale = Vector(
+            (new_mass, new_mass, new_mass))
+        return {'FINISHED'}
+
 class ApplySolverOperator(bpy.types.Operator):
     bl_idname = "apply.solver"
     bl_label = "Apply solver to custom particle system"
@@ -178,6 +197,18 @@ class RemoveForceOperator(bpy.types.Operator):
         force_idx = int(context.scene.force_name)
         p_system.force_list.pop(force_idx)
         return {'FINISHED'}
+
+class RemoveConstraintOperator(bpy.types.Operator):
+    bl_idname = "constraint.remove"
+    bl_label = "Remove constraint"
+    bl_description = "remove constraint"
+
+    def execute(self, context):
+        p_system = particle_system.ParticleSystem.get_instance()
+        constraint_idx = int(context.scene.constraint_name)
+        p_system.constraint_list.pop(constraint_idx)
+        return {'FINISHED'}
+
 
 class AddWallCollisionOperator(bpy.types.Operator):
     bl_idname = "collision.wall"
@@ -296,46 +327,43 @@ class ParticleSimulationPanel(bpy.types.Panel):
 
         # FIXME solver update while loading init
         row = layout.row()
-        row.prop(context.scene, "solver_name")
-        row.operator('apply.solver', text="apply solver")
+        row.prop(context.scene, "solver_name", text="Solver")
+        row.operator('apply.solver', text="Apply")
+        row.separator()
 
         row = layout.row()
-        row.operator('delete_system.particle', text="delete particle system")
-        row.operator('particle_system.save_init', text="save init particle system")
-        row.operator('particle_system.load_init', text="load init particle system")
+        row.operator('delete_system.particle', text="Delete particle system")
         row = layout.row()
-        row.operator('particle_system.save_animation', text="save particle system animation")
-        row.operator('particle_system.load_animation', text="load particle system animation")
+        row.label(text='Init particle system')
+        row.operator('particle_system.save_init', text="Save")
+        row.operator('particle_system.load_init', text="Load")
+        row = layout.row()
+        row.label(text='Particle system animation')
+        row.operator('particle_system.save_animation', text="Save animation")
+        row.operator('particle_system.load_animation', text="Load animation")
 
         row = layout.row()
-        row.prop(context.scene, "modify_particle_location", text="Realtime modify particle location")
+        row.operator('particle.calculate_frame', text="Calculate animation")
         row = layout.row()
-        row.operator('apply_constant_force.particle', text="apply constant force")
-        row = layout.row()
-        row.operator('apply_damping_force.particle', text="apply damping force")
-        row = layout.row()
-        row.prop(context.scene, 'spring_particle_idx', text="spring particle")
-        row.operator('apply_spring_force.particle', text="apply spring force")
-        row = layout.row()
-        row.operator('particle.calculate_frame', text="calculate frame")
-        row = layout.row()
-        row.operator('particle_system.mass_spring_system', text="mass spring system")
-        row.operator('particle_system.cloth_mass_spring_system', text="cloth system")
-        row = layout.row()
-        row.prop(context.scene, 'axis_particle_idx', text="axis particle")
-        row.prop(context.scene, 'pair_particle_1_idx', text="pair particle 1")
-        row.prop(context.scene, 'pair_particle_2_idx', text="pair particle 2")
-        row.operator('constraint.angular', text="add angular constraint")
-        row = layout.row()
-        row.operator('collision.wall', text="add wall collision")
-        row.operator('collision.particle', text="add particle collision")
+        row.operator('particle_system.mass_spring_system', text="Mass spring system")
+        row.operator('particle_system.cloth_mass_spring_system', text="Cloth system")
+
+class ParticleManagePanel(bpy.types.Panel):
+    bl_parent_id = "PARTICLE_PT_SIMULATION"
+    bl_label = "Particle management"
+    bl_category = "Particle System"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        layout = self.layout
+        # scene = context.scene
+
         row = layout.row()
         row.operator('add.particle', text="add particle")
-
-
         row = layout.row()
         row.separator()
-        row.prop(context.scene, 'select_particle_idx', text="particle list")
+        row.prop(context.scene, 'select_particle_idx', text="Particle")
         if context.scene.select_particle_idx != "None":
             p_system = particle_system.ParticleSystem.get_instance()
             particle_idx = int(context.scene.select_particle_idx)
@@ -343,6 +371,25 @@ class ParticleSimulationPanel(bpy.types.Panel):
                 p_system.draw(context, layout, particle_idx)
                 row.operator('remove.particle', text="remove particle")
 
+
+class ForceManagePanel(bpy.types.Panel):
+    bl_parent_id = "PARTICLE_PT_SIMULATION"
+    bl_label = "Force management"
+    bl_category = "Particle System"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        layout = self.layout
+        # scene = context.scene
+
+        row = layout.row()
+        row.operator('apply_constant_force.particle', text="Add constant force")
+        row = layout.row()
+        row.operator('apply_damping_force.particle', text="Add damping force")
+        row = layout.row()
+        row.prop(context.scene, 'spring_particle_idx', text="spring particle")
+        row.operator('apply_spring_force.particle', text="Add spring force")
         row = layout.row()
         row.separator()
         row.prop(context.scene, 'force_name', text="force list")
@@ -353,14 +400,47 @@ class ParticleSimulationPanel(bpy.types.Panel):
                 p_system.force_list[force_idx].draw(context, layout)
                 row.operator('force.remove', text="remove current force")
 
+class CollisionManagePanel(bpy.types.Panel):
+    bl_parent_id = "PARTICLE_PT_SIMULATION"
+    bl_label = "Collision management"
+    bl_category = "Particle System"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        layout = self.layout
+        # scene = context.scene
+
+        row = layout.row()
+        row.operator('collision.wall', text="Wall collision")
+        row.operator('collision.particle', text="Particle collision")
+
+class ConstraintManagePanel(bpy.types.Panel):
+    bl_parent_id = "PARTICLE_PT_SIMULATION"
+    bl_label = "Constraint management"
+    bl_category = "Particle System"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        layout = self.layout
+        # scene = context.scene
+
+        row = layout.row()
+        row.prop(context.scene, 'pair_particle_1_idx', text="Pair particle 1")
+        row.prop(context.scene, 'axis_particle_idx', text="Axis particle")
+        row.prop(context.scene, 'pair_particle_2_idx', text="Pair particle 2")
+        row.operator('constraint.angular', text="Angular constraint")
+
         row = layout.row()
         row.separator()
-        row.prop(context.scene, 'constraint_name', text="constraint list")
+        row.prop(context.scene, 'constraint_name', text="Constraint")
         if context.scene.constraint_name != "None":
             p_system = particle_system.ParticleSystem.get_instance()
             constraint_idx = int(context.scene.constraint_name)
-            p_system.constraint_list[constraint_idx].draw(context, layout)
-#            row.operator('force.remove', text="remove current force")
+            if constraint_idx < len(p_system.constraint_list):
+                p_system.constraint_list[constraint_idx].draw(context, layout)
+                row.operator('constraint.remove', text="remove current constraint")
 
 
 def particle_item_callback(self, context):
@@ -406,43 +486,24 @@ def obj_location_callback(ob):
         ob.name, ob.location)
     )
 
-def modify_particle_update(self, context):
-    print("modify")
-    if context.scene.modify_particle_location == True:
-        # p_system = particle_system.ParticleSystem.get_instance()
-        # for i in range(len(p_system.particle_list)):
-        #     object = context.scene.objects.get(str(i))
-        #     subscribe_to = object.path_resolve("location", False)
-        #     bpy.msgbus.subscribe_rna(
-        #         key=subscribe_to,
-        #         # owner of msgbus subcribe (for clearing later)
-        #         owner=object,
-        #         # Args passed to callback function (tuple)
-        #         args=(object,),
-        #         # Callback function for property update
-        #         notify=obj_location_callback,
-        #     )
-        pass
-    else:
-        pass
-        # TODO
-        # p_system = particle_system.ParticleSystem.get_instance()
-        # for i in range(len(p_system.particle_list)):
-        #     object = context.scene.objects.get(str(i))
-        #     subscribe_to = object.path_resolve("location", False)
-
 def register():
     bpy.utils.register_class(DeleteParticleSystemOperator)
     bpy.utils.register_class(ParticleSimulationPanel)
+    bpy.utils.register_class(ParticleManagePanel)
+    bpy.utils.register_class(ForceManagePanel)
+    bpy.utils.register_class(CollisionManagePanel)
+    bpy.utils.register_class(ConstraintManagePanel)
     bpy.utils.register_class(ApplyConstantForceOperator)
     bpy.utils.register_class(ApplyDampingForceOperator)
     bpy.utils.register_class(ApplySpringForceOperator)
     bpy.utils.register_class(CalculateFrameOperator)
     bpy.utils.register_class(AddParticleOperator)
     bpy.utils.register_class(RemoveParticleOperator)
+    bpy.utils.register_class(SyncParticleInitOperator)
     bpy.utils.register_class(ApplySolverOperator)
     bpy.utils.register_class(MassSpringSystemOperator)
     bpy.utils.register_class(RemoveForceOperator)
+    bpy.utils.register_class(RemoveConstraintOperator)
     bpy.utils.register_class(ClothMassSpringSystemOperator)
     bpy.utils.register_class(AddWallCollisionOperator)
     bpy.utils.register_class(AddParticleCollisionOperator)
@@ -458,7 +519,6 @@ def register():
     bpy.utils.register_class(custom_prop.SpringForceProp)
     bpy.utils.register_class(custom_prop.AngularConstraintProp)
 
-    bpy.types.Scene.modify_particle_location = BoolProperty(name="modify_particle_location", update=modify_particle_update)
     bpy.types.Scene.spring_particle_idx = bpy.props.EnumProperty(name="spring_particle_idx", items=particle_item_callback)
     bpy.types.Scene.solver_name = bpy.props.EnumProperty(name="solver_name", items=solver_item_callback)
     bpy.types.Scene.particle_property = bpy.props.PointerProperty(type=custom_prop.ParticleProp)
@@ -476,15 +536,21 @@ def register():
 def unregister():
     bpy.utils.unregister_class(DeleteParticleSystemOperator)
     bpy.utils.unregister_class(ParticleSimulationPanel)
+    bpy.utils.unregister_class(ParticleManagePanel)
+    bpy.utils.unregister_class(ForceManagePanel)
+    bpy.utils.unregister_class(CollisionManagePanel)
+    bpy.utils.unregister_class(ConstraintManagePanel)
     bpy.utils.unregister_class(ApplyConstantForceOperator)
     bpy.utils.unregister_class(ApplyDampingForceOperator)
     bpy.utils.unregister_class(ApplySpringForceOperator)
     bpy.utils.unregister_class(CalculateFrameOperator)
     bpy.utils.unregister_class(AddParticleOperator)
     bpy.utils.unregister_class(RemoveParticleOperator)
+    bpy.utils.unregister_class(SyncParticleInitOperator)
     bpy.utils.unregister_class(ApplySolverOperator)
     bpy.utils.unregister_class(MassSpringSystemOperator)
     bpy.utils.unregister_class(RemoveForceOperator)
+    bpy.utils.unregister_class(RemoveConstraintOperator)
     bpy.utils.unregister_class(ClothMassSpringSystemOperator)
     bpy.utils.unregister_class(AddWallCollisionOperator)
     bpy.utils.unregister_class(AddParticleCollisionOperator)
@@ -501,7 +567,6 @@ def unregister():
     bpy.utils.unregister_class(custom_prop.SpringForceProp)
     bpy.utils.unregister_class(custom_prop.AngularConstraintProp)
 
-    del bpy.types.Scene.modify_particle_location
     del bpy.types.Scene.solver_name
     del bpy.types.Scene.particle_property
     del bpy.types.Scene.constant_force_vector

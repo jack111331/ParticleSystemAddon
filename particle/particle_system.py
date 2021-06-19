@@ -184,9 +184,13 @@ class ParticleSystem:
         bpy.context.scene.particle_property.init_location.foreach_set(self.init_particle_list[particle_idx].location)
         bpy.context.scene.particle_property.init_velocity.foreach_set(self.init_particle_list[particle_idx].velocity)
         bpy.context.scene.particle_property.init_mass.foreach_set((self.init_particle_list[particle_idx].mass, ))
-        row.prop(context.scene.particle_property, "init_location", text="Initial location")
-        row.prop(context.scene.particle_property, "init_velocity", text="Initial velocity")
-        row.prop(context.scene.particle_property, "init_mass", text="Initial mass")
+
+        row.label(text="Initialize property")
+        row.operator('particle.sync_init', text="Sync initial state")
+        row = layout.row()
+        row.prop(context.scene.particle_property, "init_location", text="Location")
+        row.prop(context.scene.particle_property, "init_velocity", text="Velocity")
+        row.prop(context.scene.particle_property, "init_mass", text="Mass")
         ParticleProp.particle_reference = self.init_particle_list[particle_idx]
 
     def get_particle_idx(self, particle):
